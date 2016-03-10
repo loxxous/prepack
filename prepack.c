@@ -1,13 +1,13 @@
-﻿/*
-	sampled data recoder by Lucas Marsh
-	complex arithmetic is specifically avoided like mult, div, and mod. such operations are synthesized.
-	
-	encoding:
-		pass 1: skims over input file to get a rough idea of how many channels there are
-		pass 2: encodes a 1 byte header with the amount of channels then encodes the entire file
-	decoding is a single pass that un-interleaves the data with n channels.
+/*
+sampled data recoder by Lucas Marsh
+complex arithmetic is specifically avoided like mult, div, and mod. such operations are synthesized.
 
-	encode method is either delta (best for image) or adaptive LPC with a single weight (best for audio)
+encoding:
+pass 1: skims over input file to get a rough idea of how many channels there are
+pass 2: encodes a 1 byte header with the amount of channels then encodes the entire file
+decoding is a single pass that un-interleaves the data with n channels.
+
+encode method is either delta (best for image) or adaptive LPC with a single weight (best for audio)
 */
 
 #include <stdlib.h>
@@ -18,11 +18,12 @@
 
 #define blocksize 24576
 #define boost 24
-#define totalChannels 14
+#define totalChannels 15
+#define breakpoint 10
 
 typedef uint8_t byte;
 
-byte indexToChannel[] = {0, 1, 2, 3, 4, 6, 8, 0, 1, 2, 3, 4, 6, 8}; // 0-7 Delta, 8-14 Adaptive
+byte indexToChannel[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 6, 8 }; // 0-9 Delta, 10-15 Adaptive
 
 int weight = 0; // weight [-1, 1]
 int rate = 6; // learning rate for filter
@@ -32,16 +33,16 @@ byte previous[8]; // up to 8 channels for delta
 
 byte deltaEnc(byte b, int i)
 {
-    byte delta = previous[i] - b;
-    previous[i] = b;
-    return delta;
+	byte delta = previous[i] - b;
+	previous[i] = b;
+	return delta;
 }
- 
+
 byte deltaDec(byte delta, int i)
 {
-    byte b = previous[i] - delta;
-    previous[i] = b;
-    return b;
+	byte b = previous[i] - delta;
+	previous[i] = b;
+	return b;
 }
 
 /// adaptive delta ///
@@ -94,7 +95,7 @@ int d = 0;
 int modulo(int max)
 {
 	d++;
-	if(d == max) d = 0;
+	if (d == max) d = 0;
 	return d;
 }
 
@@ -207,12 +208,12 @@ int main(int argc, char* argv[])
 					{
 						count(buffer[i], index);
 					}
-					else if (index < 7)
+					else if (index < breakpoint)
 					{
 						int mod = modulo(channel);
 						count(deltaEnc(buffer[i], mod), index);
 					}
-					else if(index >= 7)
+					else if (index >= breakpoint)
 					{
 						int mod = modulo(channel);
 						count(adaptiveDeltaEnc(buffer[i], mod), index);
@@ -229,11 +230,11 @@ int main(int argc, char* argv[])
 		}
 		/// find best encode method ///
 		int channel = findSmallestChannel();
-		if(channel < 7)
+		if (channel < breakpoint)
 			printf("\nencoding channel %i standard\n", indexToChannel[channel]);
 		else
 			printf("\nencoding channel %i adaptive\n", indexToChannel[channel]);
-		
+
 		// reset variables
 		for (int j = 0; j < 8; j++)
 		{
@@ -259,7 +260,7 @@ int main(int argc, char* argv[])
 				}
 			}
 			// encode
-			if(channel < 7)
+			if (channel < breakpoint)
 			{
 				for (int i = 0; i < r; i++)
 				{
@@ -293,7 +294,7 @@ int main(int argc, char* argv[])
 	if (argv[1][0] == 'd')
 	{
 		int channel = getc(in);
-		if(channel < 7)
+		if (channel < breakpoint)
 			printf("\ndecoding channel %i standard\n", indexToChannel[channel]);
 		else
 			printf("\ndecoding channel %i adaptive\n", indexToChannel[channel]);
@@ -317,7 +318,7 @@ int main(int argc, char* argv[])
 				}
 			}
 			// decode
-			if(channel < 7)
+			if (channel < breakpoint)
 			{
 				for (int i = 0; i < r; i++)
 				{
